@@ -1,0 +1,1423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Cart | Student Portal</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        /* CSS styles remain the same */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #e0e7ff; }
+        ::-webkit-scrollbar-thumb { background: #4f46e5; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3730a3; }
+
+        html { font-family: 'Inter', sans-serif; }
+        .shadow-deep {
+            box-shadow: 0 15px 30px -10px rgba(79, 70, 229, 0.2), 0 5px 10px -5px rgba(0, 0, 0, 0.1);
+        }
+        .btn-primary {
+            background-image: linear-gradient(to right, #4f46e5 0%, #8b5cf6 100%);
+            transition: all 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-image: linear-gradient(to right, #8b5cf6 0%, #4f46e5 100%);
+            transform: translateY(-2px);
+            box-shadow: 0 15px 25px -5px rgba(79, 70, 229, 0.4);
+        }
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 5px 10px -5px rgba(79, 70, 229, 0.4);
+        }
+        .view-hidden {
+            display: none;
+        }
+        .splash-card-image {
+            object-fit: cover;
+            width: 100%;
+            height: 100%;
+        }
+        .animate-pulse-slow {
+            animation: pulse-slow 4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse-slow {
+          0%, 100% { opacity: 1; }
+          50% { opacity: .5; }
+        }
+        .modal {
+            transition: opacity 0.3s ease, visibility 0.3s ease;
+        }
+        .product-card-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+        @media (min-width: 1024px) { 
+            .product-card-grid {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            }
+        }
+        @media (min-width: 1280px) { 
+            .product-card-grid {
+                grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            }
+        }
+        .search-bar-container {
+            flex-grow: 1;
+            max-width: 700px;
+            margin: 0 1rem;
+        }
+        input[type="range"] {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 100%;
+            height: 8px;
+            background: #e0e0e0;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.7;
+            -webkit-transition: .2s;
+            transition: opacity .2s;
+        }
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #4f46e5;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        input[type="range"]::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: #4f46e5;
+            border-radius: 50%;
+            cursor: pointer;
+            border: 2px solid #ffffff;
+            box-shadow: 0 0 5px rgba(0,0,0,0.2);
+        }
+        .range-slider {
+            position: relative;
+            height: 20px;
+            padding: 0 5px;
+        }
+        .range-slider .range-fill {
+            position: absolute;
+            height: 8px;
+            background: #8b5cf6;
+            border-radius: 5px;
+            top: 6px;
+        }
+    </style>
+    <script>
+        // --- CONFIGURATION & STATE ---
+        const API_BASE_URL = 'http://127.0.0.1:8000/api';
+        const IS_MOCKING_API = true; // <<< TEMPORARILY SET TO TRUE TO AVOID "FAILED TO FETCH" ERRORS
+
+        let currentView = 'splash';
+        
+        let products = [];
+        let cart = {};
+        
+        let customXeroxQuantity = 0;
+        let uploadedFileName = ''; 
+        const XEROX_PRICE_PER_PAGE = 0.50;
+        const XEROX_PRODUCT_ID = 999;
+        
+        let userId = 'student-xyz-123'; 
+        let searchQuery = ''; 
+        let activeCategory = 'All'; 
+        let sortBy = 'featured';
+        
+        let deliveryFilters = {
+            allPrime: false, primeDelivery: false, tomorrowBy11AM: false, getItByTomorrow: false, getItIn2Days: false
+        };
+        let priceRange = { min: 0, max: 1000 };
+        let selectedPriceFilter = 'All';
+        let dealFilters = {
+            allDiscounts: false, todayDeals: false
+        };
+
+        // --- MOCK DATA (Re-introduced) ---
+        const MOCK_PRODUCTS = [
+            { id: 2, name: "Blue Gel Pen (Smooth Flow)", price: 15.00, stock: 120, category: "🖊️ 1. Writing Instruments", icon: "🖊️", imageUrl: "https://tiimg.tistatic.com/fp/2/007/854/smooth-flow-writing-gel-blue-pen-665.jpg", description: "Ergonomic design gel pen with smooth, quick-drying blue ink. Perfect for long writing sessions." },
+            { id: 3, name: "Premium Highlighter Set", price: 65.00, stock: 30, category: "🖊️ 1. Writing Instruments", icon: "🖍️", imageUrl: "https://tiimg.tistatic.com/fp/2/007/913/comfortable-grip-smooth-writing-and-leak-proof-plastic-ball-pen-842.jpg", description: "Set of 6 fluorescent highlighters (yellow, pink, green, blue, orange, purple). Chisel tip for thin or thick lines." },
+            { id: 1, name: "A4 Notebook (200 Pgs)", price: 250.50, stock: 50, category: "📄 2. Paper Products", icon: "📚", imageUrl: "https://static.viking-direct.co.uk/is/image/odeu13/6932960?wid=400&hei=400&fmt=jpg&qlt=75&resMode=sharp2&op_usm=1.2,0.3,10,0", description: "High-quality, spiral-bound A4 notebook with 200 perforated pages. Ideal for lectures and note-taking." },
+            { id: 9, name: "Scientific Calculator (FX-100)", price: 450.00, stock: 10, category: "🧮 7. Instruments & Calculators", icon: "🧮", imageUrl: "https://placehold.co/100x100/94a3b8/1e293b?text=Calc", description: "Advanced scientific calculator supporting 240 functions. Essential for science and engineering students." },
+            { id: 13, name: "Stapler (Heavy Duty)", price: 180.00, stock: 20, category: "✂ 4. Office & Desk Supplies", icon: "📎", imageUrl: "https://m.media-amazon.com/images/I/61iPqY+2fLL._SL1500_.jpg", description: "Robust stapler for up to 50 sheets. Comes with a box of staples." },
+            { id: 19, name: "Water Bottle (1 Litre)", price: 299.00, stock: 25, category: "💧 6. Student Essentials", icon: "💧", imageUrl: "https://m.media-amazon.com/images/I/61m3bC+q5oL._SL1500_.jpg", description: "BPA-free 1-litre water bottle with leak-proof design. Ideal for staying hydrated during classes." },
+        ];
+
+
+        // --- API INTEGRATION FUNCTIONS (Adjusted for Mock/Live Toggle) ---
+
+        /**
+         * Fetches products from the Django API.
+         */
+        async function fetchProducts() {
+            document.getElementById('product-grid-container').innerHTML = '<div class="col-span-full text-center text-lg text-indigo-600 font-semibold py-12">Loading Products...</div>';
+            
+            if (IS_MOCKING_API) {
+                products = MOCK_PRODUCTS.map(p => ({
+                    ...p,
+                    stock_quantity: p.stock // Use existing mock stock
+                }));
+                // Add the special xerox service manually
+                if (!products.find(p => p.id === XEROX_PRODUCT_ID)) {
+                    products.push({ id: XEROX_PRODUCT_ID, name: "Custom Xeroxing Service", price: XEROX_PRICE_PER_PAGE, stock: 9999, category: "Service", icon: "📄", imageUrl: "https://placehold.co/100x100/d1d5db/374151?text=Xerox", description: "On-demand photocopying service. Price is per page. Note: Cancellation of xerox orders results in money deduction." });
+                }
+
+                // Recalculate max price range based on mock products
+                const maxProductPrice = Math.max(...products.filter(p => p.id !== XEROX_PRODUCT_ID).map(p => p.price), 100);
+                priceRange.max = Math.ceil(maxProductPrice / 100) * 100;
+                document.getElementById('price-range-slider').max = priceRange.max;
+                document.getElementById('price-range-slider').value = priceRange.max;
+                document.getElementById('price-max-display').textContent = `₹${priceRange.max.toFixed(2)}+`;
+
+                renderProducts(); 
+                renderCategoriesSidebar(); 
+                return;
+            }
+            
+            // --- LIVE API LOGIC ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/products/`);
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                const data = await response.json();
+                
+                products = data.map(p => ({
+                    id: p.id,
+                    name: p.name,
+                    price: parseFloat(p.price),
+                    stock: p.stock_quantity,
+                    category: p.category_display || 'Other',
+                    icon: p.icon || '📦',
+                    imageUrl: p.image_url || `https://placehold.co/100x100/cccccc/333333?text=${p.name.substring(0, 3)}`,
+                    description: p.description || 'No description available.',
+                }));
+
+                // Add the special xerox service manually
+                if (!products.find(p => p.id === XEROX_PRODUCT_ID)) {
+                    products.push({ id: XEROX_PRODUCT_ID, name: "Custom Xeroxing Service", price: XEROX_PRICE_PER_PAGE, stock: 9999, category: "Service", icon: "📄", imageUrl: "https://placehold.co/100x100/d1d5db/374151?text=Xerox", description: "On-demand photocopying service. Price is per page. Note: Cancellation of xerox orders results in money deduction." });
+                }
+
+                // Recalculate max price range based on live products
+                const maxProductPrice = Math.max(...products.filter(p => p.id !== XEROX_PRODUCT_ID).map(p => p.price), 100);
+                priceRange.max = Math.ceil(maxProductPrice / 100) * 100;
+                document.getElementById('price-range-slider').max = priceRange.max;
+                document.getElementById('price-range-slider').value = priceRange.max;
+                document.getElementById('price-max-display').textContent = `₹${priceRange.max.toFixed(2)}+`;
+                
+                renderProducts(); 
+                renderCategoriesSidebar(); 
+            } catch (error) {
+                console.error("Error fetching products:", error);
+                document.getElementById('product-grid-container').innerHTML = '<div class="col-span-full text-center text-lg text-red-600 font-semibold py-12">API Error: Cannot connect to Django server. Check if server is running and CORS is enabled.</div>';
+                showToast("Failed to load products. Check server.", 'warning');
+            }
+        }
+
+        /**
+         * Fetches available time slots from Django API.
+         */
+        async function fetchTimeSlots() {
+            if (IS_MOCKING_API) {
+                return generateMockTimeSlots();
+            }
+
+            // --- LIVE API LOGIC ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/time_slots/`);
+                if (!response.ok) throw new Error('Failed to fetch time slots');
+                return await response.json(); // Returns an array of slot objects
+            } catch (error) {
+                console.error("Error fetching time slots:", error);
+                // The main populate function handles the display message
+                return [];
+            }
+        }
+
+        async function populateTimeSlots() {
+            const slotSelect = document.getElementById('pickup-time-slot');
+            if (!slotSelect) return;
+
+            slotSelect.innerHTML = '<option value="">-- Loading Available Slots... --</option>';
+
+            const slots = await fetchTimeSlots();
+
+            slotSelect.innerHTML = '<option value="">-- Select Your 15-Minute Slot --</option>';
+
+            if (slots.length === 0 && !IS_MOCKING_API) {
+                const today = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+                slotSelect.innerHTML += `<option value="" disabled>No available break time slots remaining for ${today}.</option>`;
+                return;
+            }
+
+            slots.forEach(slot => {
+                const option = document.createElement('option');
+                // The value should be the primary key ID of the slot object from Django (or mock value if mocking)
+                option.value = IS_MOCKING_API ? slot.value : slot.id; 
+                option.textContent = IS_MOCKING_API ? slot.text : `${slot.start_time} - ${slot.end_time}`;
+                slotSelect.appendChild(option);
+            });
+        }
+        
+        async function handleCheckoutSubmit() {
+            const timeSlotId = document.getElementById('pickup-time-slot').value;
+            const paymentMethodElement = document.querySelector('input[name="payment-method"]:checked');
+            const confirmButton = document.getElementById('confirm-order-btn');
+            
+            if (!timeSlotId || !paymentMethodElement) {
+                showToast("Please select time slot and payment method.", 'warning');
+                return;
+            }
+
+            const paymentMethod = paymentMethodElement.value;
+
+            if (customXeroxQuantity > 0 && uploadedFileName === '') {
+                showToast("Please upload your document for Xeroxing or set page count to zero.", 'warning');
+                return;
+            }
+
+            confirmButton.disabled = true;
+            confirmButton.textContent = 'Processing...';
+
+            const orderItems = Object.keys(cart).map(id => {
+                const productId = parseInt(id);
+                const isXerox = productId === XEROX_PRODUCT_ID;
+                
+                return {
+                    product_id: productId, // Send the product ID/PK
+                    quantity: cart[id],
+                    is_xerox: isXerox,
+                    xerox_file_name: isXerox ? uploadedFileName : null, // Mocking file submission via name
+                };
+            }).filter(item => item.quantity > 0);
+
+            const orderPayload = {
+                student_id: userId, // Assuming anonymous ID or logged-in user ID
+                pickup_time_slot_id: parseInt(timeSlotId), // Send the ID/PK of the slot
+                payment_method: paymentMethod.toUpperCase(),
+                items: orderItems,
+            };
+
+            if (IS_MOCKING_API) {
+                const mockCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                processOrderSuccess(mockCode, orderPayload);
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Confirm Order & Pay';
+                return;
+            }
+
+            // --- REAL API CALL (POST /api/orders/) ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/orders/`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(orderPayload)
+                });
+
+                const data = await response.json();
+
+                if (response.status === 201) { 
+                    showToast("Order placed successfully!", 'success');
+                    processOrderSuccess(data.pickup_code, orderPayload); // Django should return the pickup_code
+                } else {
+                    const errorMessage = data.detail || data.error || JSON.stringify(data);
+                    showToast(`Failed to place order: ${errorMessage}`, 'warning');
+                    console.error("Order API Error:", data);
+                }
+            } catch (error) {
+                console.error("Error during order submission:", error);
+                showToast("Network error. Could not connect to the Django server.", 'warning');
+            } finally {
+                confirmButton.disabled = false;
+                confirmButton.textContent = 'Confirm Order & Pay';
+            }
+        }
+        
+        function processOrderSuccess(orderCode, orderPayload) {
+            // Logic remains the same, using the real pickup_code returned by Django
+            document.getElementById('order-code-display').textContent = orderCode;
+            
+            const isXerox = orderPayload.items.some(item => item.is_xerox);
+            
+            document.getElementById('cancellation-details').textContent = isXerox ? 
+                `Note: Xeroxing service fee is deducted if you fail to pick up within the slot.` :
+                "If the order is cancelled, a full refund will be initiated if paid online.";
+            
+            const totalAmount = document.getElementById('checkout-final-total').textContent;
+            document.getElementById('qr-mock-text').textContent = `${orderPayload.payment_method} Payment for ${totalAmount}`;
+            
+            cart = {};
+            customXeroxQuantity = 0;
+            uploadedFileName = '';
+            
+            updateXeroxUI();
+            renderCart();
+            fetchProducts();
+            switchView('confirmation');
+        }
+
+        // --- MOCK Time Slot Generation (Fallback if IS_MOCKING_API is true) ---
+        function generateMockTimeSlots() {
+            const now = new Date();
+            const minPickupTime = now.getTime() + 15 * 60000; 
+            const slots = [];
+            const fixedBreaks = [
+                { hour: 10, minute: 30, label: '1st break' }, 
+                { hour: 12, minute: 30, label: '2nd break' }, 
+                { hour: 15, minute: 30, label: '3rd break' }, 
+                { hour: 17, minute: 0, label: 'Final pickup window' } 
+            ];
+
+            fixedBreaks.forEach((breakTime, index) => {
+                const pickupStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), breakTime.hour, breakTime.minute, 0);
+                const pickupEnd = new Date(pickupStart.getTime() + 15 * 60000);
+
+                if (pickupStart.getTime() > minPickupTime) {
+                    const startStr = pickupStart.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    const endStr = pickupEnd.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: true });
+                    
+                    let text;
+                    if (breakTime.hour === 10) { text = `10:30 AM - 10:45 AM (1st break)`; } 
+                    else if (breakTime.hour === 12) { text = `12:30 PM - 12:45 PM (2nd break)`; } 
+                    else if (breakTime.hour === 15) { text = `3:30 PM - 3:45 PM (3rd break)`; } 
+                    else if (breakTime.hour === 17) { text = `5:00 PM - 5:15 PM (Final pickup window)`; } 
+                    else { text = `${breakTime.label}: ${startStr} - ${endStr}`; }
+                    
+                    slots.push({ id: index + 1, value: `${startStr}-${endStr}`, text }); // Mock ID and Value
+                }
+            });
+            return slots;
+        }
+
+        // --- REST OF THE JS LOGIC REMAINS THE SAME, BUT RELIES ON LIVE DATA ---
+
+        function switchView(viewId) {
+            currentView = viewId;
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.classList.add('view-hidden');
+            });
+            const targetView = document.getElementById(`view-${viewId}`);
+            if (targetView) {
+                targetView.classList.remove('view-hidden');
+            }
+            
+            document.querySelectorAll('.nav-btn').forEach(btn => {
+                const isActive = btn.getAttribute('data-view-target') === viewId;
+                if (viewId === 'shop' || viewId === 'orders' || viewId === 'profile') { 
+                    btn.classList.remove('text-indigo-600', 'bg-indigo-100');
+                    btn.classList.add('text-gray-500');
+                    if (isActive) {
+                        btn.classList.add('text-indigo-600', 'bg-indigo-100');
+                        btn.classList.remove('text-gray-500');
+                    }
+                } else {
+                    btn.classList.remove('text-indigo-600', 'bg-indigo-100');
+                    btn.classList.add('text-gray-500');
+                }
+            });
+            
+            if (viewId === 'shop') { 
+                renderProducts(); 
+            }
+
+            if (viewId === 'checkout') {
+                renderCheckoutSummary();
+                populateTimeSlots(); 
+            }
+        }
+
+        function showItemDetails(productId) {
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            document.getElementById('modal-product-image').src = product.imageUrl;
+            document.getElementById('modal-product-name').textContent = product.name;
+            document.getElementById('modal-product-price').textContent = `₹${product.price.toFixed(2)}`;
+            document.getElementById('modal-product-stock').textContent = `Stock: ${product.stock > 0 ? product.stock + ' available' : 'Sold Out'}`;
+            document.getElementById('modal-product-description').textContent = product.description;
+
+            document.getElementById('item-detail-modal').classList.remove('opacity-0', 'pointer-events-none');
+        }
+
+        function closeItemDetails() {
+            document.getElementById('item-detail-modal').classList.add('opacity-0', 'pointer-events-none');
+        }
+        
+        function handleXeroxFileUpload(event) {
+            const fileInput = event.target;
+            uploadedFileName = (fileInput.files && fileInput.files.length > 0) ? fileInput.files[0].name : '';
+            if (uploadedFileName) showToast(`Document selected: ${uploadedFileName}`, 'success');
+            updateXeroxUI();
+        }
+        
+        function renderProducts() { 
+            const productGridContainer = document.getElementById('product-grid-container');
+            if (!productGridContainer) return;
+
+            // Add the special xerox service manually if not already added by API fetch
+            if (!products.find(p => p.id === XEROX_PRODUCT_ID)) {
+                products.push({ id: XEROX_PRODUCT_ID, name: "Custom Xeroxing Service", price: XEROX_PRICE_PER_PAGE, stock: 9999, category: "Service", icon: "📄", imageUrl: "https://placehold.co/100x100/d1d5db/374151?text=Xerox", description: "On-demand photocopying service. Price is per page. Note: Cancellation of xerox orders results in money deduction." });
+            }
+
+            // Filter products based on search query and active category, price, and deals
+            let filteredProducts = products.filter(product => {
+                const matchesSearch = product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                      product.description.toLowerCase().includes(searchQuery.toLowerCase());
+                const matchesCategory = activeCategory === 'All' || product.category === activeCategory;
+                
+                // Price filter logic
+                let matchesPrice = true;
+                if (selectedPriceFilter === 'upTo450') {
+                    matchesPrice = product.price <= 450;
+                } else if (selectedPriceFilter === 'over450') {
+                    matchesPrice = product.price > 450;
+                } else if (selectedPriceFilter === 'custom') {
+                    matchesPrice = product.price >= priceRange.min && product.price <= priceRange.max;
+                }
+
+                // Deal and Delivery filters are visual mocks only for now
+                let matchesDeals = true;
+                let matchesDelivery = true;
+
+                return matchesSearch && matchesCategory && matchesPrice && matchesDeals && matchesDelivery;
+            });
+
+            // Sort products
+            filteredProducts.sort((a, b) => {
+                if (sortBy === 'price_asc') {
+                    return a.price - b.price;
+                } else if (sortBy === 'price_desc') {
+                    return b.price - a.price;
+                }
+                return 0;
+            });
+
+            // Separate Xerox product
+            const xeroxProduct = filteredProducts.find(p => p.id === XEROX_PRODUCT_ID);
+            const otherProducts = filteredProducts.filter(p => p.id !== XEROX_PRODUCT_ID);
+
+            let productHtml = '';
+
+            // --- Xerox Banner Rendering (FULL WIDTH) ---
+            if (xeroxProduct && (activeCategory === 'All' || activeCategory === 'Service') && (xeroxProduct.name.toLowerCase().includes(searchQuery.toLowerCase()) || xeroxProduct.description.toLowerCase().includes(searchQuery.toLowerCase()))) {
+                const fileStatusText = uploadedFileName ? `File attached: ${uploadedFileName}` : 'WARNING: Please upload document!';
+                const fileStatusClass = uploadedFileName ? 'text-green-300' : 'text-red-400';
+                
+                productHtml += `
+                    <div class="col-span-full mb-4">
+                        <h3 class="text-2xl font-bold text-gray-900 border-b pb-2">Custom Services</h3>
+                    </div>
+                    <div class="col-span-full bg-indigo-700 p-6 rounded-2xl shadow-deep border-4 border-indigo-900 mb-8 flex flex-col lg:flex-row justify-between lg:items-center flex-wrap">
+                        
+                        <div class="flex items-center mb-4 lg:mb-0">
+                            <img src="${xeroxProduct.imageUrl}" onclick="showItemDetails(${xeroxProduct.id})" class="w-16 h-16 rounded-lg mr-4 object-cover cursor-pointer hover:opacity-80 transition duration-150" alt="${xeroxProduct.name}">
+                            <div>
+                                <h3 class="text-xl font-bold text-white">${xeroxProduct.name}</h3>
+                                <p class="text-sm text-indigo-300">Price: ₹${XEROX_PRICE_PER_PAGE.toFixed(2)} per page | <span class="text-red-300 font-semibold">Cancellation Penalty Applies</span></p>
+                            </div>
+                        </div>
+
+                        <!-- FILE UPLOAD SECTION --><div class="bg-indigo-900 p-3 rounded-xl shadow-inner border border-indigo-600 my-4 lg:my-0 lg:w-1/3">
+                            <label for="xerox-file-input" class="text-xs font-semibold uppercase text-indigo-300 block mb-1">
+                                1. Upload Document (PDF/JPG)
+                            </label>
+                            <input type="file" id="xerox-file-input" onchange="handleXeroxFileUpload(event)" class="w-full text-sm text-white file:mr-4 file:py-1 file:px-2 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500"/>
+                            <p id="xerox-file-status" class="text-xs mt-1 font-medium ${fileStatusClass}">${fileStatusText}</p>
+                        </div>
+
+                        <!-- QUANTITY CONTROL SECTION --><div class="flex flex-col items-end space-y-2 w-full lg:w-auto">
+                            <div class="flex items-center space-x-3 bg-white p-3 rounded-xl shadow-inner border border-gray-200">
+                                <label class="text-xs font-semibold uppercase text-gray-600">2. Pages:</label>
+                                <button onclick="handleXeroxChange(-1)" class="p-2 text-red-600 hover:text-red-800 font-extrabold text-lg transition duration-150">-</button>
+                                <input id="xerox-quantity-input" type="number" min="0" value="${customXeroxQuantity}" readonly class="w-12 text-center font-bold text-gray-900 border-none focus:ring-0 bg-transparent">
+                                <button onclick="handleXeroxChange(1)" class="p-2 text-green-600 hover:text-green-800 font-extrabold text-lg transition duration-150">+</button>
+                            </div>
+                            <span id="xerox-total-price" class="text-lg font-bold text-white ml-4 bg-indigo-600 px-3 py-1 rounded-lg">₹${(customXeroxQuantity * XEROX_PRICE_PER_PAGE).toFixed(2)}</span>
+                        </div>
+
+                    </div>
+                `;
+            }
+            // --- End Xerox Banner Rendering ---
+            
+            // "Showing products near you, with fast delivery"
+            productHtml += `
+                <div class="col-span-full bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6">
+                    <p class="text-gray-700 font-bold">Showing <span class="text-indigo-600">${filteredProducts.length}</span> results for <span class="text-indigo-600 font-bold">${searchQuery || activeCategory}</span> with fast delivery</p>
+                    <p class="text-sm text-gray-500 mt-1">See all products, across price ranges.</p>
+                </div>
+            `;
+
+
+            // Group products by category (excluding Xerox if already handled)
+            const categories = otherProducts.reduce((acc, product) => {
+                const cat = product.category || 'Other';
+                if (!acc[cat]) { acc[cat] = []; }
+                acc[cat].push(product);
+                return acc;
+            }, {});
+
+            const displayOrder = [
+                "🖊️ 1. Writing Instruments", "📄 2. Paper Products", "📏 3. Drawing & Geometry Tools", 
+                "✂ 4. Office & Desk Supplies", "🎨 5. Art & Craft Supplies", "💧 6. Student Essentials",
+                "🧮 7. Instruments & Calculators", "Other"
+            ];
+            const sortedCategories = displayOrder.filter(cat => categories[cat]);
+            
+            sortedCategories.forEach(category => {
+                productHtml += `
+                    <div class="col-span-full mt-4">
+                        <h3 class="text-xl font-bold text-gray-900 mb-4 border-b pb-2">${category.replace(/^[0-9]\.\s/, '')}</h3>
+                    </div>
+                    
+                    <div class="col-span-full product-card-grid mb-8">
+                `;
+                categories[category].forEach(product => {
+                    const isOutOfStock = product.stock <= 0;
+                    const currentQuantity = cart[product.id] || 0;
+                    
+                    // Product Card (The key Flipkart-style component)
+                    productHtml += `
+                        <div class="bg-white rounded-xl shadow-lg hover:shadow-2xl transition duration-300 flex flex-col overflow-hidden border border-gray-100">
+                            <!-- Image Area --><div class="p-2 h-40 flex items-center justify-center bg-gray-50 cursor-pointer" onclick="showItemDetails(${product.id})">
+                                <img src="${product.imageUrl}" alt="${product.name}" class="max-h-full max-w-full object-contain rounded-lg">
+                            </div>
+
+                            <!-- Details Area --><div class="p-3 flex-grow flex flex-col justify-between">
+                                <div>
+                                    <h4 class="text-sm font-semibold text-gray-800 truncate" title="${product.name}">
+                                        ${product.name}
+                                    </h4>
+                                    <p class="text-lg font-extrabold text-indigo-700 mt-1">
+                                        ₹${product.price.toFixed(2)}
+                                    </p>
+                                </div>
+                                <p class="text-xs ${isOutOfStock ? 'text-red-500 font-bold' : 'text-green-600'} mt-1">
+                                    ${isOutOfStock ? 'Sold Out' : product.stock + ' in Stock'}
+                                </p>
+                            </div>
+
+                            <!-- Add to Cart / Quantity Control Button --><div class="p-3 border-t border-gray-100">
+                                ${isOutOfStock ? `
+                                    <button disabled class="w-full py-2 text-sm font-bold rounded-lg bg-gray-200 text-gray-500 cursor-not-allowed">
+                                        Out of Stock
+                                    </button>
+                                ` : currentQuantity > 0 ? `
+                                    <div class="flex items-center justify-center space-x-2 w-full bg-indigo-50 p-1 rounded-lg border border-indigo-200">
+                                        <button onclick="changeQuantity(${product.id}, -1)" class="text-red-600 hover:text-white hover:bg-red-500 w-8 h-8 font-extrabold rounded-md transition duration-150 text-base">-</button>
+                                        <span id="qty-card-${product.id}" class="font-bold text-base text-gray-900">${currentQuantity} in Cart</span>
+                                        <button onclick="changeQuantity(${product.id}, 1)" class="text-green-600 hover:text-white hover:bg-green-500 w-8 h-8 font-extrabold rounded-md transition duration-150 text-base">+</button>
+                                    </div>
+                                ` : `
+                                    <button onclick="addToCart(${product.id})" class="btn-primary w-full py-2 text-white font-bold text-sm rounded-lg hover:shadow-xl">
+                                        Add to Cart
+                                    </button>
+                                `}
+                            </div>
+                        </div>
+                    `;
+                });
+                productHtml += `
+                    </div>
+                `; 
+            });
+
+            productGridContainer.innerHTML = productHtml;
+
+            // Update quantity display on the product cards (after initial render)
+            otherProducts.forEach(product => {
+                const cardQtySpan = document.getElementById(`qty-card-${product.id}`);
+                if (cardQtySpan) {
+                    cardQtySpan.textContent = `${cart[product.id] || 0} in Cart`;
+                }
+            });
+        }
+        
+        function renderCategoriesSidebar() {
+            const categoriesSidebar = document.getElementById('categories-sidebar');
+            if (!categoriesSidebar) return;
+
+            const uniqueCategories = new Set(products.map(p => p.category).filter(Boolean));
+            const categoryHtml = `
+                <h3 class="text-lg font-bold text-gray-800 mb-3">Categories</h3>
+                <ul class="space-y-2">
+                    <li>
+                        <button onclick="setCategoryFilter('All')" class="category-btn w-full text-left p-2 rounded-lg ${activeCategory === 'All' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'}">All Products</button>
+                    </li>
+                    ${Array.from(uniqueCategories).map(cat => `
+                        <li>
+                            <button onclick="setCategoryFilter('${cat}')" class="category-btn w-full text-left p-2 rounded-lg ${activeCategory === cat ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'}">${cat.replace(/^[0-9]\.\s/, '')}</button>
+                        </li>
+                    `).join('')}
+                </ul>
+            `;
+            categoriesSidebar.innerHTML = categoryHtml;
+        }
+
+        function setCategoryFilter(category) {
+            activeCategory = category;
+            renderProducts();
+            document.querySelectorAll('.category-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-100', 'text-indigo-700', 'font-semibold');
+                btn.classList.add('hover:bg-gray-100', 'text-gray-700');
+            });
+            const activeBtn = Array.from(document.querySelectorAll('.category-btn')).find(btn => btn.textContent.includes(category === 'All' ? 'All Products' : category.replace(/^[0-9]\.\s/, '')));
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-100', 'text-indigo-700', 'font-semibold');
+                activeBtn.classList.remove('hover:bg-gray-100', 'text-gray-700');
+            }
+        }
+
+        function handleSearchInput(event) {
+            searchQuery = event.target.value;
+            renderProducts();
+        }
+
+        function setSortBy(value) {
+            sortBy = value;
+            renderProducts();
+        }
+
+        function toggleDeliveryFilter(filterName) {
+            deliveryFilters[filterName] = !deliveryFilters[filterName];
+            renderProducts();
+        }
+
+        function handlePriceRangeInput(event) {
+            const slider = event.target;
+            priceRange.max = parseInt(slider.value);
+            document.getElementById('price-max-display').textContent = `₹${priceRange.max.toFixed(2)}+`;
+            updatePriceRangeFill();
+            selectedPriceFilter = 'custom'; 
+            renderProducts();
+        }
+
+        function updatePriceRangeFill() {
+            const slider = document.getElementById('price-range-slider');
+            const fill = document.getElementById('price-range-fill');
+            const min = parseInt(slider.min);
+            const max = parseInt(slider.max);
+            const current = parseInt(slider.value);
+            const percentage = ((current - min) / (max - min)) * 100;
+            fill.style.width = `${percentage}%`;
+            fill.style.left = `${0}%`;
+        }
+
+        function setPriceFilter(filter) {
+            selectedPriceFilter = filter;
+            renderProducts();
+
+            document.querySelectorAll('.price-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-100', 'text-indigo-700', 'font-semibold');
+                btn.classList.add('hover:bg-gray-100', 'text-gray-700');
+            });
+            const activeBtn = document.getElementById(`price-filter-${filter}`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-indigo-100', 'text-indigo-700', 'font-semibold');
+                activeBtn.classList.remove('hover:bg-gray-100', 'text-gray-700');
+            }
+        }
+
+        function toggleDealFilter(filterName) {
+            dealFilters[filterName] = !dealFilters[filterName];
+            renderProducts();
+        }
+        
+        function renderCart() {
+            const desktopContainer = document.getElementById('cart-items-container-desktop');
+            const cartTotalElement = document.getElementById('cart-total');
+            const cartCountElement = document.getElementById('cart-count');
+            
+            if (!desktopContainer || !cartTotalElement || !cartCountElement) return;
+
+            desktopContainer.innerHTML = '';
+            let total = 0;
+            let totalItems = 0;
+
+            const productMap = products.reduce((map, p) => { map[p.id] = p; return map; }, {});
+            const itemIds = Object.keys(cart).map(Number).filter(id => cart[id] > 0);
+
+            desktopContainer.innerHTML = itemIds.length === 0 
+                ? '<p class="text-gray-500 text-center py-6 border-t border-dashed">Your cart is empty. Start shopping!</p>'
+                : '<p class="text-sm text-gray-500 font-bold uppercase mb-2">Order Summary</p>';
+
+            itemIds.forEach(id => {
+                const product = productMap[id];
+                const quantity = cart[id];
+                const itemTotal = product.price * quantity;
+                total += itemTotal;
+                totalItems += quantity;
+
+                const isXerox = product.id === XEROX_PRODUCT_ID;
+                const fileDisplay = isXerox && uploadedFileName ? `<span class="text-xs text-indigo-300 block leading-tight">File: ${uploadedFileName}</span>` : '';
+                const penaltyDisplay = isXerox ? `<span class="text-red-500 text-xs mt-1 font-semibold block">Penalty: ₹${(product.price * quantity).toFixed(2)} on cancellation!</span>` : '';
+
+                const cartItem = `
+                    <div class="flex items-center justify-between py-3 border-b border-gray-100">
+                        <div class="flex items-start space-x-3">
+                            <img src="${product.imageUrl}" alt="${product.name}" class="w-8 h-8 rounded-md object-cover flex-shrink-0 border border-gray-200">
+                            
+                            <div class="flex flex-col items-start">
+                                <span class="text-base font-medium text-gray-800 leading-tight">${product.name}</span>
+                                <span class="text-xs text-gray-500">@ ₹${product.price.toFixed(2)}</span>
+                                ${fileDisplay}
+                                ${penaltyDisplay}
+                            </div>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="changeQuantity(${id}, -1)" class="text-gray-600 hover:text-red-600 font-bold p-1 rounded-full bg-gray-50">-</button>
+                            <span class="font-bold text-sm min-w-[20px] text-center">${quantity}</span>
+                            <button onclick="changeQuantity(${id}, 1)" class="text-gray-600 hover:text-green-600 font-bold p-1 rounded-full bg-gray-50">+</button>
+                        </div>
+                    </div>
+                `;
+                desktopContainer.innerHTML += cartItem;
+            });
+
+            cartTotalElement.textContent = `₹${total.toFixed(2)}`;
+            cartCountElement.textContent = totalItems.toString();
+            
+            updateMobileCartDisplay();
+
+            if (currentView === 'shop') { 
+                products.filter(p => p.id !== XEROX_PRODUCT_ID).forEach(product => {
+                    const cardQtySpan = document.getElementById(`qty-card-${product.id}`);
+                    if (cardQtySpan) {
+                         const currentQuantity = cart[product.id] || 0;
+                         if (currentQuantity === 0) {
+                            renderProducts(); 
+                         } else {
+                            cardQtySpan.textContent = `${currentQuantity} in Cart`;
+                         }
+                    }
+                });
+            }
+        }
+
+        function updateXeroxUI() {
+            const xeroxInput = document.getElementById('xerox-quantity-input');
+            const xeroxTotal = document.getElementById('xerox-total-price');
+            const xeroxStatus = document.getElementById('xerox-file-status');
+
+            const total = customXeroxQuantity * XEROX_PRICE_PER_PAGE;
+            
+            if(xeroxInput) xeroxInput.value = customXeroxQuantity;
+            if(xeroxTotal) xeroxTotal.textContent = `₹${total.toFixed(2)}`;
+
+            if(xeroxStatus) {
+                if(uploadedFileName) {
+                    xeroxStatus.textContent = `File attached: ${uploadedFileName}`;
+                    xeroxStatus.className = 'text-xs mt-1 font-medium text-green-300';
+                } else {
+                    xeroxStatus.textContent = customXeroxQuantity > 0 ? 'WARNING: Please upload document!' : 'Waiting for file...';
+                    xeroxStatus.className = `text-xs mt-1 font-medium ${customXeroxQuantity > 0 ? 'text-red-400' : 'text-indigo-300'}`;
+                }
+            }
+
+            if (customXeroxQuantity > 0) {
+                if (!products.find(p => p.id === XEROX_PRODUCT_ID)) {
+                     products.push({ id: XEROX_PRODUCT_ID, name: "Custom Xeroxing Service", price: XEROX_PRICE_PER_PAGE, stock: 9999, category: "Service", icon: "📄", imageUrl: "https://placehold.co/100x100/d1d5db/374151?text=Xerox", description: "On-demand photocopying service. Price is per page. Note: Cancellation of xerox orders results in money deduction." });
+                }
+                cart[XEROX_PRODUCT_ID] = customXeroxQuantity;
+            } else {
+                delete cart[XEROX_PRODUCT_ID]; 
+            }
+            renderCart();
+        }
+
+        function handleXeroxChange(delta) {
+            customXeroxQuantity = Math.max(0, customXeroxQuantity + delta);
+            updateXeroxUI();
+            if(customXeroxQuantity > 0 && delta > 0) {
+                showToast("Xerox pages added. Service charges apply on cancellation.", 'info');
+            }
+        }
+
+        function renderCheckoutSummary() {
+            const summaryDiv = document.getElementById('checkout-summary-details');
+            const finalTotal = document.getElementById('checkout-final-total');
+            if (!summaryDiv || !finalTotal) return;
+
+            let total = 0;
+            const itemDetails = Object.keys(cart).map(id => {
+                const isXerox = parseInt(id) === XEROX_PRODUCT_ID; 
+                const product = products.find(p => p.id === parseInt(id) || isXerox);
+                const quantity = cart[id];
+                const itemTotal = product.price * quantity;
+                total += itemTotal;
+                
+                const fileInfo = isXerox && uploadedFileName ? ` (${uploadedFileName})` : '';
+
+                return `
+                    <li class="flex justify-between py-2 border-b border-gray-100 ${isXerox ? 'font-semibold text-red-700' : ''}">
+                        <span class="text-gray-700 ${isXerox ? 'text-red-700' : ''}">${product.icon} ${product.name} x ${quantity}${fileInfo}</span>
+                        <span class="font-bold">₹${itemTotal.toFixed(2)}</span>
+                    </li>
+                `;
+            }).join('');
+
+            summaryDiv.innerHTML = `<ul class="space-y-1">${itemDetails}</ul>`;
+            finalTotal.textContent = `₹${total.toFixed(2)}`;
+        }
+        
+        function addToCart(productId) {
+            const product = products.find(p => p.id === productId);
+            const currentQuantity = cart[productId] || 0;
+            
+            if (!product || product.stock <= 0 || currentQuantity + 1 > product.stock) {
+                showToast(`Cannot add more. Only ${product.stock} left!`, 'warning');
+                return;
+            }
+
+            cart[productId] = currentQuantity + 1;
+            renderCart();
+            showToast(`${product.name} added to cart!`, 'success');
+        }
+
+        function changeQuantity(productId, delta) {
+            if (productId === XEROX_PRODUCT_ID) { 
+                handleXeroxChange(delta);
+                return;
+            }
+            
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+            
+            const currentQuantity = cart[productId] || 0;
+            const newQuantity = currentQuantity + delta;
+
+            if (newQuantity < 0) return;
+            
+            if (newQuantity > product.stock) {
+                showToast(`Cannot add more. Only ${product.stock} left!`, 'warning');
+                return;
+            }
+
+            if (newQuantity === 0) {
+                delete cart[productId];
+            } else {
+                cart[productId] = newQuantity;
+            }
+            renderCart();
+        }
+
+        function proceedToCheckout() {
+            if (Object.keys(cart).length === 0) {
+                showToast("Your cart is empty. Please add items first.", 'warning');
+                return;
+            }
+            switchView('checkout');
+        }
+
+        function confirmOrder() {
+            handleCheckoutSubmit();
+        }
+
+        function toggleCart() {
+            const cartSidebar = document.getElementById('cart-sidebar-mobile');
+            const backdrop = document.getElementById('backdrop');
+            cartSidebar.classList.toggle('translate-x-full');
+            backdrop.classList.toggle('hidden');
+        }
+
+        function updateMobileCartDisplay() {
+            const desktopContainer = document.getElementById('cart-items-container-desktop');
+            const mobileCloneContainer = document.getElementById('cart-items-container-mobile-clone');
+            
+            if (desktopContainer && mobileCloneContainer) {
+                mobileCloneContainer.innerHTML = desktopContainer.innerHTML;
+            }
+            document.getElementById('cart-count-mobile').textContent = document.getElementById('cart-count').textContent;
+            document.getElementById('cart-total-mobile').textContent = document.getElementById('cart-total').textContent;
+        }
+
+        function showToast(message, type) {
+            const toast = document.getElementById('toast-notification');
+            const toastText = document.getElementById('toast-text');
+            const colors = {
+                success: 'bg-green-600 border-green-800',
+                warning: 'bg-yellow-500 border-yellow-700',
+                info: 'bg-blue-600 border-blue-800'
+            };
+
+            toast.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] p-4 rounded-xl shadow-2xl text-white font-semibold transition-all duration-300 transform border-b-4 ${colors[type]}`;
+            toastText.textContent = message;
+            toast.classList.remove('opacity-0', 'translate-y-full');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-full');
+            }, 3500);
+        }
+
+        window.onload = async () => {
+            await fetchProducts(); 
+            updateXeroxUI();
+            renderCart();
+            switchView('splash');
+            populateTimeSlots();
+            updatePriceRangeFill(); 
+
+            setTimeout(() => {
+                const notificationBadge = document.getElementById('notification-badge');
+                if (notificationBadge) notificationBadge.classList.remove('hidden');
+                showToast("🔔 Your order pickup is ready in 5 minutes! (Simulated)", 'warning');
+            }, 5000);
+        };
+    </script>
+</head>
+<body class="bg-indigo-50 text-gray-800 antialiased min-h-screen pb-16 lg:pb-0">
+
+    <!-- Item Detail Modal (New) --><div id="item-detail-modal" class="modal fixed inset-0 bg-gray-900 bg-opacity-80 z-50 flex items-center justify-center opacity-0 pointer-events-none" onclick="closeItemDetails()">
+        <div class="bg-white p-8 rounded-2xl shadow-2xl max-w-lg w-full m-4" onclick="event.stopPropagation()">
+            <div class="flex justify-between items-start mb-6">
+                <h3 id="modal-product-name" class="text-3xl font-extrabold text-indigo-700">Product Name</h3>
+                <button onclick="closeItemDetails()" class="text-gray-500 hover:text-gray-900 p-1">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            
+            <div class="flex space-x-6">
+                <img id="modal-product-image" src="" alt="Product Image" class="w-32 h-32 rounded-xl object-cover border-2 border-gray-200 flex-shrink-0">
+                <div>
+                    <p id="modal-product-price" class="text-2xl font-bold text-gray-900 mb-1">₹0.00</p>
+                    <p id="modal-product-stock" class="text-sm font-medium text-green-600 mb-4">Stock: 50 available</p>
+                </div>
+            </div>
+
+            <h4 class="text-lg font-bold text-gray-800 mt-6 mb-2 border-t pt-4">Description</h4>
+            <p id="modal-product-description" class="text-gray-600 leading-relaxed"></p>
+            
+            <button onclick="closeItemDetails()" class="btn-primary mt-8 w-full py-3 text-white font-bold rounded-xl shadow-lg">
+                Got It! Back to Shop
+            </button>
+        </div>
+    </div>
+    <!-- End Item Detail Modal --><!-- Toast Notification --><div id="toast-notification" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] p-4 rounded-xl shadow-2xl text-white font-semibold transition-all duration-300 transform opacity-0 translate-y-full" style="min-width: 280px;">
+        <span id="toast-text"></span>
+    </div>
+
+    <!-- Header / Navigation Bar --><header class="bg-white shadow-deep sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex flex-col md:flex-row justify-between items-center space-y-4 md:space-y-0">
+            <div class="flex items-center space-x-3 flex-shrink-0">
+                <span class="text-3xl">🛍️</span>
+                <h1 class="text-2xl font-extrabold text-gray-900">Campus <span class="text-indigo-600">Cart</span></h1>
+            </div>
+
+            <!-- Search Bar (Now prominent in header) --><div class="search-bar-container relative flex-grow mx-4">
+                <input type="text" id="product-search-input" onkeyup="handleSearchInput(event)" placeholder="Search for products, categories..." 
+                       class="w-full pl-10 pr-4 py-2 rounded-xl border border-gray-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition duration-150">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+            </div>
+
+            <div class="flex items-center space-x-6 flex-shrink-0">
+                <!-- Language/Region (Mock) --><button class="hidden lg:flex items-center space-x-1 text-gray-700 hover:text-indigo-600 transition duration-150 text-sm font-semibold p-2 rounded-lg hover:bg-indigo-50">
+                    <img src="https://upload.wikimedia.org/wikipedia/commons/7/7b/Flag_of_India_%282001%29.svg" alt="India Flag" class="w-5 h-auto rounded-sm">
+                    <span>EN</span>
+                    <svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </button>
+
+                <!-- Notifications Bell --><button class="relative p-2 rounded-full text-gray-500 hover:text-indigo-600 transition duration-150" onclick="switchView('shop')">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0a3 3 0 11-6 0m6 0h-6"></path></svg>
+                    <span id="notification-badge" class="hidden absolute top-1 right-1 h-2 w-2 rounded-full bg-red-600 ring-2 ring-white animate-ping"></span>
+                </button>
+
+                <!-- Profile/Login Placeholder --><button onclick="switchView('profile')" class="hidden sm:block text-sm font-semibold text-gray-700 hover:text-indigo-600 transition duration-150 p-2 rounded-lg hover:bg-indigo-50">
+                    Hello, <span class="font-bold">Student!</span> <br> <span class="text-xs text-gray-500">Account & Lists</span>
+                </button>
+
+                <!-- Cart Button (Mobile/Tablet) --><button onclick="toggleCart()" class="relative p-2 rounded-full bg-indigo-100 text-indigo-600 hover:bg-indigo-200 lg:hidden transition duration-150">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                    <span id="cart-count-mobile" class="absolute top-0 right-0 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">0</span>
+                </button>
+
+                <!-- Desktop Cart Icon --><a href="#" onclick="toggleCart()" class="hidden lg:flex flex-col items-center p-2 text-gray-500 hover:text-indigo-600 transition duration-150">
+                    <div class="relative">
+                        <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z"></path></svg>
+                        <span id="cart-count" class="absolute -top-1 -right-1 inline-flex items-center justify-center px-2 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">0</span>
+                    </div>
+                    <span class="text-sm font-semibold mt-1">Cart</span>
+                </a>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout --><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 flex space-x-6">
+
+        <!-- Left Sidebar for Filters/Categories --><aside id="left-sidebar" class="hidden lg:block w-1/4 xl:w-1/5 pr-4 sticky top-[100px] h-fit max-h-[calc(100vh-108px)] overflow-y-auto">
+            <div class="bg-white p-6 rounded-2xl shadow-deep border border-gray-200 space-y-8">
+                
+                <!-- Delivery Filters --><div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">Delivery</h3>
+                    <ul class="space-y-2">
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDeliveryFilter('allPrime')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${deliveryFilters.allPrime ? 'checked' : ''}>
+                                All Prime
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDeliveryFilter('primeDelivery')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${deliveryFilters.primeDelivery ? 'checked' : ''}>
+                                Prime Delivery
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDeliveryFilter('tomorrowBy11AM')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${deliveryFilters.tomorrowBy11AM ? 'checked' : ''}>
+                                Tomorrow by 11 AM
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDeliveryFilter('getItByTomorrow')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${deliveryFilters.getItByTomorrow ? 'checked' : ''}>
+                                Get It by Tomorrow
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDeliveryFilter('getItIn2Days')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${deliveryFilters.getItIn2Days ? 'checked' : ''}>
+                                Get It in 2 Days
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Price Range Filter --><div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">Price</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <span id="price-min-display" class="font-semibold text-gray-700">₹0</span>
+                        <span id="price-max-display" class="font-semibold text-gray-700">₹${priceRange.max.toFixed(2)}+</span>
+                    </div>
+                    <div class="range-slider mb-4">
+                        <div id="price-range-fill" class="range-fill"></div>
+                        <input type="range" id="price-range-slider" min="0" value="${priceRange.max}" 
+                               oninput="handlePriceRangeInput(event)" onchange="renderProducts()">
+                    </div>
+                    <div class="flex space-x-2">
+                        <button onclick="setPriceFilter('All')" id="price-filter-All" 
+                                class="price-filter-btn w-1/2 p-2 rounded-lg text-center text-sm border border-gray-300 transition ${selectedPriceFilter === 'All' ? 'bg-indigo-100 text-indigo-700 font-semibold border-indigo-500' : 'hover:bg-gray-100 text-gray-700'}">
+                            All
+                        </button>
+                        <button onclick="setPriceFilter('custom')" 
+                                class="price-filter-btn w-1/2 p-2 rounded-lg text-center text-sm border border-gray-300 transition ${selectedPriceFilter === 'custom' ? 'bg-indigo-100 text-indigo-700 font-semibold border-indigo-500' : 'hover:bg-gray-100 text-gray-700'}">
+                            Apply
+                        </button>
+                    </div>
+                    <ul class="space-y-2 mt-4">
+                        <li>
+                            <button onclick="setPriceFilter('upTo450')" id="price-filter-upTo450"
+                                    class="price-filter-btn w-full text-left p-2 rounded-lg ${selectedPriceFilter === 'upTo450' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'}">
+                                Up to ₹450
+                            </button>
+                        </li>
+                        <li>
+                            <button onclick="setPriceFilter('over450')" id="price-filter-over450"
+                                    class="price-filter-btn w-full text-left p-2 rounded-lg ${selectedPriceFilter === 'over450' ? 'bg-indigo-100 text-indigo-700 font-semibold' : 'hover:bg-gray-100 text-gray-700'}">
+                                Over ₹450
+                            </button>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Categories --><div id="categories-sidebar">
+                    <!-- Categories will be rendered here by renderCategoriesSidebar() --></div>
+
+                <!-- Deals & Discounts --><div>
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">Deals & Discounts</h3>
+                    <ul class="space-y-2">
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDealFilter('allDiscounts')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${dealFilters.allDiscounts ? 'checked' : ''}>
+                                All Discounts
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" onchange="toggleDealFilter('todayDeals')" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2" ${dealFilters.todayDeals ? 'checked' : ''}>
+                                Today's Deals
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Dynamic Main Content Area --><main class="w-full lg:w-3/4 xl:w-4/5">
+            
+            <!-- 0. Splash View (First Page) --><section id="view-splash" class="app-view">
+                <div class="bg-white p-8 rounded-3xl shadow-deep border-4 border-indigo-200 text-center">
+                    <h2 class="text-4xl font-extrabold text-indigo-700 mb-2">Welcome to Campus Cart!</h2>
+                    <p class="text-xl text-gray-600 mb-8">Your fast lane to campus stationery essentials.</p>
+
+                    <!-- Key Feature Highlight --><div class="bg-red-50 p-4 rounded-xl border border-red-300 mb-8 max-w-2xl mx-auto">
+                        <p class="text-lg font-bold text-red-700">🛑 Skip the Break Time Queue!</p>
+                        <p class="text-sm text-gray-600">Order, select a 15-minute pickup slot, and collect instantly. No more waiting!</p>
+                    </div>
+
+                    <!-- Item Showcase with Mock Images --><div class="grid grid-cols-3 gap-4 mb-10 max-w-xl mx-auto">
+                        <div class="bg-gray-100 p-3 rounded-xl shadow-md">
+                            <img src="https://placehold.co/150x100/93c5fd/1e40af?text=Notebook" alt="Notebook Placeholder" class="splash-card-image rounded-lg mb-2">
+                            <p class="text-sm font-semibold text-gray-700">A4 Notebooks</p>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-xl shadow-md">
+                            <img src="https://placehold.co/150x100/fecaca/991b1b?text=Pens" alt="Pens Placeholder" class="splash-card-image rounded-lg mb-2">
+                            <p class="text-sm font-semibold text-gray-700">Blue/Black Pens</p>
+                        </div>
+                        <div class="bg-gray-100 p-3 rounded-xl shadow-md">
+                            <img src="https://placehold.co/150x100/d1d5db/374151?text=Xerox" alt="Xerox Placeholder" class="splash-card-image rounded-lg mb-2">
+                            <p class="text-sm font-semibold text-gray-700">Xerox Service</p>
+                        </div>
+                    </div>
+
+                    <button onclick="switchView('shop')" class="btn-primary px-10 py-4 text-white font-extrabold text-xl rounded-xl shadow-lg">
+                        Go to Shop ✨
+                    </button>
+                    <p class="text-sm text-gray-500 mt-4">Check out our latest arrivals and special offers!</p>
+                </div>
+            </section>
+            
+            <!-- 1. Shop View (Main Shopping Page with Filters/Search) --><section id="view-shop" class="app-view view-hidden">
+                <div class="flex items-center justify-between mb-6">
+                    <!-- Breadcrumbs --><nav class="text-sm text-gray-500">
+                        <ol class="list-none p-0 inline-flex">
+                            <li class="flex items-center">
+                                <a href="#" onclick="setCategoryFilter('All')" class="text-indigo-600 hover:underline">Home</a>
+                                <span class="mx-2">/</span>
+                            </li>
+                            <!-- Dynamic Category/Search Breadcrumb -->
+                            ${activeCategory !== 'All' ? `
+                            <li class="flex items-center">
+                                <a href="#" onclick="setCategoryFilter('${activeCategory}')" class="text-indigo-600 hover:underline">${activeCategory.replace(/^[0-9]\.\s/, '')}</a>
+                                ${searchQuery ? '<span class="mx-2">/</span>' : ''}
+                            </li>` : `<li class="flex items-center"><span class="text-gray-700">All Products</span>${searchQuery ? '<span class="mx-2">/</span>' : ''}</li>`}
+
+                            ${searchQuery ? `
+                            <li class="flex items-center">
+                                <span class="text-gray-700 font-semibold">Search Results for "${searchQuery}"</span>
+                            </li>
+                            ` : ''}
+                        </ol>
+                    </nav>
+
+                    <!-- Sort By Dropdown --><div class="relative">
+                        <select onchange="setSortBy(this.value)" class="block appearance-none w-full bg-white border border-gray-300 text-gray-700 py-2 px-4 pr-8 rounded-md shadow leading-tight focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent">
+                            <option value="featured" ${sortBy === 'featured' ? 'selected' : ''}>Sort By: Featured</option>
+                            <option value="price_asc" ${sortBy === 'price_asc' ? 'selected' : ''}>Sort By: Price: Low to High</option>
+                            <option value="price_desc" ${sortBy === 'price_desc' ? 'selected' : ''}>Sort By: Price: High to Low</option>
+                        </select>
+                        <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-700">
+                            <svg class="fill-current h-4 w-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20"><path d="M9.293 12.95l.707.707L15.657 8l-1.414-1.414L10 10.828 6.757 7.586 5.343 9z"/></svg>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Promotional Banner (Mimicking Amazon Pay Gift Card) --><div class="bg-gradient-to-r from-purple-600 to-indigo-700 p-6 rounded-2xl shadow-deep mb-8 flex flex-col md:flex-row items-center justify-between">
+                    <div class="flex items-center mb-4 md:mb-0">
+                        <img src="https://placehold.co/100x100/f5d0fe/a21caf?text=Gift" alt="Campus Cart Gift Card" class="w-20 h-20 rounded-lg mr-4 object-cover">
+                        <div>
+                            <h3 class="text-2xl font-bold text-white">Campus Cart Gift Card</h3>
+                            <p class="text-sm text-purple-200">This festive season, give a gift of choice!</p>
+                        </div>
+                    </div>
+                    <button class="bg-white text-indigo-700 font-bold py-2 px-6 rounded-lg hover:bg-gray-100 transition duration-150 shadow-md">
+                        Shop Gift Cards
+                    </button>
+                </div>
+                
+                <!-- Product Grid (Dashboard content) --><div id="product-grid-container" class="grid grid-cols-1 gap-6">
+                    <!-- Products/Categories will be injected here by renderProducts() --></div>
+            </section>
+
+            <!-- 3. Checkout View --><section id="view-checkout" class="app-view view-hidden">
+                <h2 class="text-3xl font-extrabold text-gray-900 mb-8 border-b pb-2">Checkout Details</h2>
+                <div class="bg-white p-8 rounded-2xl shadow-deep space-y-6">
+                    
+                    <!-- Step 1: Order Summary --><div class="border-b pb-4">
+                        <h3 class="text-xl font-bold text-gray-800 mb-3">1. Review Items</h3>
+                        <div id="checkout-summary-details" class="bg-gray-100 p-4 rounded-xl max-h-60 overflow-y-auto border border-dashed border-gray-300">
+                            <!-- Summary details rendered here --></div>
+                        <div class="flex justify-between font-extrabold text-2xl pt-4">
+                            <span>Order Total:</span>
+                            <span id="checkout-final-total" class="text-indigo-600">₹0.00</span>
+                        </div>
+                    </div>
+
+                    <!-- Step 2: Pickup Slot (Dynamic and Realistic) --><div class="border-b pb-4">
+                        <h3 class="text-xl font-bold text-gray-800 mb-3">2. Select Pickup Time Slot</h3>
+                        <p class="text-sm text-red-600 mb-3 font-semibold">Choose carefully: Orders not collected within the 15-minute slot will be cancelled and subject to penalty (if xerox included).</p>
+                        <select id="pickup-time-slot" class="w-full p-4 border-2 border-indigo-300 rounded-xl bg-indigo-50 text-lg font-medium focus:ring-indigo-500 focus:border-indigo-500 transition duration-150">
+                            <option value="">-- Generating Available Slots... --</option>
+                        </select>
+                    </div>
+
+                    <!-- Step 3: Payment Method --><div class="pb-4">
+                            <h3 class="text-xl font-bold text-gray-800 mb-3">3. Payment Method</h3>
+                            <div class="space-y-3">
+                                <label class="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl shadow-md hover:bg-indigo-50 cursor-pointer transition border border-gray-200">
+                                    <input type="radio" name="payment-method" value="online" class="form-radio h-6 w-6 text-indigo-600 border-2 border-indigo-400">
+                                    <span class="font-semibold text-gray-800 text-lg">Online Payment (UPI/Wallet QR)</span>
+                                </label>
+                                <label class="flex items-center space-x-3 p-4 bg-gray-50 rounded-xl shadow-md hover:bg-indigo-50 cursor-pointer transition border border-gray-200">
+                                    <input type="radio" name="payment-method" value="cod" class="form-radio h-6 w-6 text-indigo-600 border-2 border-indigo-400">
+                                    <span class="font-semibold text-gray-800 text-lg">Cash on Delivery (COD)</span>
+                                </label>
+                             </div>
+                    </div>
+
+                    <button id="confirm-order-btn" onclick="confirmOrder()" class="btn-primary w-full py-4 text-white font-extrabold text-xl rounded-xl shadow-lg">
+                        Confirm Order & Pay
+                    </button>
+                </div>
+            </section>
+
+            <!-- 4. Order Confirmation View --><section id="view-confirmation" class="app-view view-hidden text-center">
+                <div class="bg-white p-10 rounded-3xl shadow-deep max-w-xl mx-auto border-4 border-green-400/50">
+                    <span class="text-7xl block mb-6">🎉</span>
+                    <h2 class="text-4xl font-extrabold text-green-700 mb-2">Order Finalized!</h2>
+                    <p class="text-gray-600 text-lg mb-8">Your order is locked in for pickup during the selected slot.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                        <!-- Pickup Code --><div class="bg-indigo-50 p-6 rounded-xl border border-indigo-300 shadow-inner">
+                            <p class="text-sm font-semibold text-gray-700 uppercase mb-2">Your Unique Pickup Code</p>
+                            <h3 id="order-code-display" class="text-4xl font-black text-indigo-800 tracking-widest my-1">
+                                <!-- Code will be injected here --></h3>
+                            <p class="text-xs text-gray-500">Show this code to the shopkeeper.</p>
+                        </div>
+                        
+                        <!-- Mock QR Code for Online Payment --><div class="bg-white p-4 rounded-xl border border-gray-300 shadow-md flex flex-col items-center justify-center">
+                            <div class="w-20 h-20 bg-gray-800 text-white flex items-center justify-center text-xs font-mono rounded-lg">
+                                [QR Mock]
+                            </div>
+                            <p id="qr-mock-text" class="text-xs text-gray-500 mt-2 font-semibold">
+                                <!-- Payment method and total injected here --></p>
+                            <p class="text-xs text-indigo-600 mt-1">Scan to Complete Payment at Counter</p>
+                        </div>
+                    </div>
+                    
+                    <p id="cancellation-details" class="text-sm text-red-700 bg-red-100 p-3 rounded-lg font-medium mb-8 border border-red-300">
+                        <!-- Cancellation details injected here --></p>
+
+                    <button onclick="switchView('shop')" class="px-8 py-3 btn-primary text-white font-bold rounded-xl shadow-lg">
+                        Go to Shop
+                    </button>
+                </div>
+            </section>
+            
+            <!-- Placeholder Views --><section id="view-orders" class="app-view view-hidden">
+                <h2 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">My Orders</h2>
+                <div class="p-6 bg-white rounded-2xl shadow-deep">
+                    <p class="text-gray-600">This view will show your history, order status (e.g., Ready for Pickup), and allow for quick re-order.</p>
+                </div>
+            </section>
+            <section id="view-profile" class="app-view view-hidden">
+                <h2 class="text-3xl font-extrabold text-gray-900 mb-6 border-b pb-2">Student Profile</h2>
+                <div class="p-6 bg-white rounded-2xl shadow-deep">
+                    <p class="text-gray-600">This view contains user settings and notification preferences.</p>
+                    <p class="mt-4 text-sm text-gray-500">User ID: <span class="font-mono text-indigo-600">${userId}</span></p>
+                </div>
+            </section>
+        </main>
+
+        <!-- Shopping Cart Sidebar (Desktop) --><aside id="cart-sidebar-desktop" class="hidden lg:block lg:w-1/4 xl:w-1/5 pl-4 sticky top-[100px] h-[calc(100vh-108px)]">
+            <div class="bg-white p-6 rounded-2xl shadow-deep border border-indigo-200 h-full flex flex-col">
+                <h2 class="text-2xl font-bold text-indigo-700 mb-4 border-b pb-2 flex justify-between items-center">
+                    Shopping Cart 
+                    <span id="cart-count" class="text-base bg-red-600 text-white px-3 py-1 rounded-full font-bold">0</span>
+                </h2>
+                
+                <!-- Cart Items Container --><div id="cart-items-container-desktop" class="flex-grow overflow-y-auto mb-6 pr-1">
+                    <!-- Cart items will be injected here by renderCart() --></div>
+
+                <!-- Filters in Cart (Mock) --><div class="mb-4 pt-4 border-t border-gray-200">
+                    <h3 class="text-lg font-bold text-gray-800 mb-3">Cart Filters (Mock)</h3>
+                    <ul class="space-y-2 text-sm">
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2">
+                                Group by Category
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2">
+                                Show only items in stock
+                            </label>
+                        </li>
+                        <li>
+                            <label class="flex items-center text-gray-700">
+                                <input type="checkbox" class="form-checkbox h-4 w-4 text-indigo-600 rounded mr-2">
+                                Highlight discounted items
+                            </label>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Cart Summary & Checkout --><div class="space-y-4 pt-4 border-t border-gray-200">
+                    <div class="flex justify-between items-center font-extrabold text-2xl">
+                        <span>Grand Total:</span>
+                        <span id="cart-total" class="text-indigo-600">₹0.00</span>
+                    </div>
+                    <button onclick="proceedToCheckout()" class="btn-primary w-full py-3 text-white font-bold text-lg rounded-xl shadow-lg">
+                        Proceed to Checkout
+                    </button>
+                    <p class="text-xs text-center text-gray-500 mt-2">
+                        You're just one step away!
+                    </p>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <!-- Mobile Cart Sidebar (Overlay) --><div id="backdrop" onclick="toggleCart()" class="fixed inset-0 bg-gray-900 bg-opacity-70 z-40 lg:hidden hidden transition-opacity duration-300"></div>
+
+    <aside id="cart-sidebar-mobile" class="fixed top-0 right-0 w-full max-w-xs h-full bg-white shadow-2xl z-50 transform translate-x-full transition-transform duration-300 lg:hidden p-6 flex flex-col">
+        <div class="flex justify-between items-center pb-4 border-b">
+            <h2 class="text-2xl font-bold text-indigo-700">Your Cart</h2>
+            <button onclick="toggleCart()" class="p-2 text-gray-500 hover:text-gray-900">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+        </div>
+        
+        <!-- Cart Items Container (Mobile Clone) --><div id="cart-items-container-mobile-clone" class="flex-grow overflow-y-auto my-4">
+             <!-- Cloned cart items --></div>
+        
+        <div class="p-4 bg-white border-t space-y-3">
+            <div class="flex justify-between items-center font-extrabold text-xl">
+                <span>Total:</span>
+                <span id="cart-total-mobile" class="text-indigo-600">₹0.00</span>
+            </div>
+            <button onclick="proceedToCheckout(); toggleCart();" class="btn-primary w-full py-3 text-white font-bold text-lg rounded-xl shadow-lg">
+                Proceed to Checkout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Mobile Bottom Navigation --><nav class="fixed bottom-0 left-0 right-0 lg:hidden bg-white border-t border-gray-200 shadow-2xl z-50">
+        <div class="flex justify-around items-center h-16">
+            <button class="nav-btn flex flex-col items-center justify-center p-2 text-gray-500 hover:text-indigo-600 transition-colors" onclick="switchView('shop')" data-view-target="shop">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0h6"></path></svg>
+                <span class="text-xs font-semibold">Shop</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center p-2 text-gray-500 hover:text-indigo-600 transition-colors" onclick="switchView('orders')" data-view-target="orders">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                <span class="text-xs font-semibold">Orders</span>
+            </button>
+            <button class="nav-btn flex flex-col items-center justify-center p-2 text-gray-500 hover:text-indigo-600 transition-colors" onclick="switchView('profile')" data-view-target="profile">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+                <span class="text-xs font-semibold">Profile</span>
+            </button>
+        </div>
+    </nav>
+</body>
+</html>

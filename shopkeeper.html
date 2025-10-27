@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Cart | Shopkeeper Admin</title>
+    <!-- Load Tailwind CSS --><script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        body { background-color: #f8fafc; } /* Tailwind gray-50 */
+        .shadow-admin {
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 0 5px 0 rgba(0, 0, 0, 0.05);
+        }
+        .btn-status { transition: background-color 0.2s, transform 0.2s; }
+        .btn-status:hover { transform: translateY(-1px); }
+        .view-hidden { display: none; }
+    </style>
+    <script>
+        // --- CONFIGURATION & STATE ---
+        const API_BASE_URL = 'http://127.0.0.1:8000/api';
+        const IS_MOCKING_API = false; // <<< CHANGED: Set to false to use Django APIs
+
+        let currentView = 'login';
+        let isAdminLoggedIn = false;
+        let orders = [];
+        let inventory = [];
+        let selectedOrder = null;
+        let authToken = 'MOCK_ADMIN_TOKEN'; // Placeholder for Django Auth
+
+        // --- MOCK DATA (Retained for structure) ---
+        const MOCK_ORDERS = [
+            { id: 101, student_username: 'Student-Priya', pickup_slot_display: '12:30 PM - 12:45 PM', status: 'PENDING', payment_method: 'ONLINE', total_amount: 155.50, pickup_code: 'QW3RTY', created_at: '2025-10-20T10:00:00Z', items: [{product_name: 'A4 Notebook (200 Pgs)', quantity: 2, is_xerox_service: false, price_at_order: 25.50}, {product_name: 'Blue Gel Pen (Smooth Flow)', quantity: 5, is_xerox_service: false, price_at_order: 15.00}]},
+            { id: 102, student_username: 'Student-Arun', pickup_slot_display: '03:30 PM - 03:45 PM', status: 'READY', payment_method: 'COD', total_amount: 450.00, pickup_code: 'ZX9CVB', created_at: '2025-10-20T11:15:00Z', items: [{product_name: 'Scientific Calculator (FX-100)', quantity: 1, is_xerox_service: false, price_at_order: 450.00}]},
+            { id: 103, student_username: 'Student-Bala', pickup_slot_display: '05:00 PM - 05:15 PM', status: 'PENDING', payment_method: 'ONLINE', total_amount: 15.00, pickup_code: 'MN5KLP', created_at: '2025-10-20T12:00:00Z', items: [{product_name: 'Whiteboard Marker (Black)', quantity: 1, is_xerox_service: false, price_at_order: 15.00}, {product_name: 'Custom Xeroxing Service', quantity: 20, is_xerox_service: true, price_at_order: 0.50}]}
+        ];
+        const MOCK_INVENTORY = [
+            { id: 1, name: "A4 Notebook (200 Pgs)", price: 25.50, stock_quantity: 48, category: "Paper" },
+            { id: 9, name: "Scientific Calculator (FX-100)", price: 450.00, stock_quantity: 9, category: "Instruments" },
+            { id: 6, name: "Whiteboard Marker (Black)", price: 15.00, stock_quantity: 59, category: "Writing" },
+            { id: 999, name: "Custom Xeroxing Service", price: 0.50, stock_quantity: 9999, category: "Service" }
+        ];
+
+        // --- AUTHENTICATION & NAVIGATION ---
+
+        function initApp() {
+            // Check auth status based on a simple flag for this mock
+            if (isAdminLoggedIn) {
+                switchView('dashboard');
+                fetchOrders();
+                fetchInventory();
+            } else {
+                switchView('login');
+            }
+        }
+
+        function handleLogin(event) {
+            event.preventDefault();
+            const username = document.getElementById('admin-username').value;
+            const password = document.getElementById('admin-password').value;
+            
+            // NOTE: In a real Django app, this would involve a POST request to a JWT/Token endpoint.
+            // Example: const response = await fetch(`${API_BASE_URL}/auth/token/`, { ... });
+            
+            if (username === 'shopkeeper' && password === 'admin123') {
+                isAdminLoggedIn = true;
+                // authToken = response.token; // Placeholder: Store real token here
+                switchView('dashboard');
+                fetchOrders();
+                fetchInventory();
+            } else {
+                // IMPORTANT: Use custom UI or console.error, avoid alert() in final production
+                alert('Invalid credentials. Use shopkeeper / admin123');
+            }
+        }
+
+        function handleLogout() {
+            isAdminLoggedIn = false;
+            authToken = null; // Clear token
+            switchView('login');
+            alert('Logged out successfully.');
+        }
+
+        function switchView(viewId) {
+            currentView = viewId;
+            document.querySelectorAll('.app-view').forEach(view => {
+                view.classList.add('view-hidden');
+            });
+            const targetView = document.getElementById(`view-${viewId}`);
+            if (targetView) {
+                targetView.classList.remove('view-hidden');
+            }
+
+            // Update header title based on view
+            document.getElementById('header-title').textContent = 
+                viewId === 'dashboard' ? 'Order Dashboard' :
+                viewId === 'inventory' ? 'Inventory Management' :
+                viewId === 'order-detail' ? `Order #${selectedOrder.id}` :
+                'Admin Panel';
+        }
+        
+        // --- DATA FETCHING & RENDERING (Integrated) ---
+
+        async function fetchOrders() {
+            if (!isAdminLoggedIn && !IS_MOCKING_API) return; 
+            
+            if (IS_MOCKING_API) {
+                orders = MOCK_ORDERS;
+                renderOrderList();
+                return;
+            }
+            
+            // --- REAL API CALL ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/shop/orders/`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!response.ok) throw new Error(`Failed to fetch orders: ${response.status}`);
+                orders = await response.json();
+                renderOrderList();
+            } catch (error) {
+                console.error("Error fetching orders:", error);
+                // alert("Error fetching orders. Check API server/authentication."); // Use console log instead of alert
+            }
+        }
+
+        function renderOrderList() {
+            const container = document.getElementById('orders-list');
+            if (!container) return;
+            
+            // Filter out completed orders by default for dashboard view
+            const activeOrders = orders.filter(o => o.status !== 'COMPLETED');
+
+            if (activeOrders.length === 0) {
+                container.innerHTML = '<p class="text-center text-gray-500 py-10">No pending or active orders right now.</p>';
+                return;
+            }
+
+            container.innerHTML = activeOrders.map(order => {
+                const statusColor = order.status === 'READY' ? 'bg-green-100 text-green-700 border-green-400' :
+                                    order.status === 'PENDING' ? 'bg-yellow-100 text-yellow-700 border-yellow-400' :
+                                    'bg-gray-100 text-gray-700 border-gray-400';
+                
+                return `
+                    <div class="bg-white p-4 rounded-xl border-l-4 ${statusColor} shadow-sm flex justify-between items-center space-x-4 hover:shadow-md transition duration-150">
+                        <div>
+                            <p class="font-bold text-lg text-gray-800">Order #${order.id} - ${order.student_username}</p>
+                            <p class="text-sm text-gray-500">Slot: ${order.pickup_slot_display} | Code: <span class="font-mono text-indigo-600">${order.pickup_code}</span></p>
+                            <p class="text-xs ${statusColor.replace(/bg-.*|border-.*/g, 'text-')} mt-1 font-semibold">${order.status}</p>
+                        </div>
+                        <div class="flex flex-col items-end space-y-2">
+                            <p class="font-extrabold text-xl text-indigo-700">₹${order.total_amount.toFixed(2)}</p>
+                            <button onclick="viewOrderDetails(${order.id})" class="text-sm bg-indigo-500 hover:bg-indigo-600 text-white font-semibold px-3 py-1 rounded-full btn-status">
+                                View Details
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function viewOrderDetails(orderId) {
+            selectedOrder = orders.find(o => o.id === orderId);
+            if (!selectedOrder) return;
+
+            // Ensure items have necessary properties (like price_at_order for display math)
+            // Note: In real DRF, price_at_order should be included in the OrderItem serializer response.
+            
+            document.getElementById('detail-order-id').textContent = selectedOrder.id;
+            document.getElementById('detail-student-name').textContent = selectedOrder.student_username;
+            document.getElementById('detail-total-amount').textContent = `₹${selectedOrder.total_amount.toFixed(2)}`;
+            document.getElementById('detail-pickup-slot').textContent = selectedOrder.pickup_slot_display;
+            document.getElementById('detail-pickup-code').textContent = selectedOrder.pickup_code;
+            document.getElementById('detail-payment-method').textContent = selectedOrder.payment_method;
+            document.getElementById('detail-status-current').textContent = selectedOrder.status;
+
+            // Render Items List
+            const itemsHtml = selectedOrder.items.map(item => {
+                // Fallback for mock/real data consistency
+                const itemPrice = item.price_at_order || 0; 
+                const itemTotal = itemPrice * item.quantity;
+
+                const isXerox = item.is_xerox_service;
+                return `
+                    <li class="flex justify-between py-2 border-b border-gray-100 ${isXerox ? 'bg-red-50 p-2 rounded-lg' : ''}">
+                        <span class="text-gray-800">${item.product_name} x ${item.quantity}</span>
+                        <span class="font-semibold text-gray-700">₹${itemTotal.toFixed(2)} ${isXerox ? '(Service)' : ''}</span>
+                    </li>
+                `;
+            }).join('');
+            document.getElementById('detail-items-list').innerHTML = itemsHtml;
+            
+            // Set status button for updating
+            document.getElementById('status-update-btn-ready').onclick = () => updateOrderStatus(selectedOrder.id, 'READY');
+            document.getElementById('status-update-btn-completed').onclick = () => updateOrderStatus(selectedOrder.id, 'COMPLETED');
+            document.getElementById('status-update-btn-cancel').onclick = () => updateOrderStatus(selectedOrder.id, 'CANCELLED');
+
+            switchView('order-detail');
+        }
+
+        async function updateOrderStatus(orderId, newStatus) {
+            // Using confirm for simplicity, ideally a custom modal should be used
+            if (!confirm(`Are you sure you want to change Order #${orderId} status to ${newStatus}?`)) return;
+
+            if (IS_MOCKING_API) {
+                const order = orders.find(o => o.id === orderId);
+                if (order) order.status = newStatus;
+                
+                // Mock reduction is simulated here
+                alert(`Order ${orderId} status mocked to ${newStatus}. Refreshing dashboard.`);
+                fetchOrders();
+                fetchInventory();
+                switchView('dashboard');
+                return;
+            }
+
+            // --- REAL API CALL ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/shop/orders/${orderId}/update_status/`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${authToken}` 
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                if (!response.ok) throw new Error('Status update failed');
+                
+                showToast(`Order ${orderId} status updated to ${newStatus}.`, 'success');
+                fetchOrders(); // Re-fetch to update the list immediately
+                fetchInventory(); // Re-fetch inventory to check stock changes
+                switchView('dashboard');
+
+            } catch (error) {
+                console.error("Error updating status:", error);
+                showToast("Failed to update status. Check server connection.", 'warning');
+            }
+        }
+
+        async function handlePickupCodeCheck(event) {
+            event.preventDefault();
+            const codeInput = document.getElementById('pickup-code-input');
+            const code = codeInput.value.trim().toUpperCase();
+            const resultDiv = document.getElementById('code-check-result');
+            resultDiv.innerHTML = '<p class="text-indigo-500 font-semibold">Checking...</p>';
+
+            if (IS_MOCKING_API) {
+                const order = orders.find(o => o.pickup_code === code && o.status !== 'COMPLETED' && o.status !== 'CANCELLED');
+                if (order) {
+                    resultDiv.innerHTML = `
+                        <div class="p-4 bg-green-100 rounded-lg border border-green-300">
+                            <p class="font-bold text-green-700">Code Valid! Order #${order.id}</p>
+                            <p class="text-sm text-green-600">Student: ${order.student_username}</p>
+                            <p class="text-sm text-green-600">Items: ${order.items.length} | Status: ${order.status}</p>
+                            <button onclick="viewOrderDetails(${order.id})" class="mt-2 text-sm bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1 rounded-full btn-status">
+                                Go to Order
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="p-4 bg-red-100 rounded-lg border border-red-300 font-bold text-red-700">Invalid or Expired Code: ${code}</p>`;
+                }
+                codeInput.value = '';
+                return;
+            }
+
+            // --- REAL API CALL (GET /api/shop/orders/check_pickup/?code=XYZ) ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/shop/orders/check_pickup/?code=${code}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                     resultDiv.innerHTML = `
+                        <div class="p-4 bg-green-100 rounded-lg border border-green-300">
+                            <p class="font-bold text-green-700">Code Valid! Order #${data.id}</p>
+                            <p class="text-sm text-green-600">Student: ${data.student_username}</p>
+                            <p class="text-sm text-green-600">Items: ${data.items.length} | Status: ${data.status}</p>
+                            <button onclick="viewOrderDetails(${data.id})" class="mt-2 text-sm bg-green-500 hover:bg-green-600 text-white font-semibold px-3 py-1 rounded-full btn-status">
+                                Go to Order
+                            </button>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `<p class="p-4 bg-red-100 rounded-lg border border-red-300 font-bold text-red-700">${data.error || 'Invalid or Expired Code.'}</p>`;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `<p class="text-red-500">Network error during code check.</p>`;
+            } finally {
+                codeInput.value = '';
+            }
+        }
+        
+        async function fetchInventory() {
+            if (!isAdminLoggedIn && !IS_MOCKING_API) return;
+
+            if (IS_MOCKING_API) {
+                inventory = MOCK_INVENTORY;
+                renderInventoryList();
+                return;
+            }
+            // --- REAL API CALL ---
+            try {
+                const response = await fetch(`${API_BASE_URL}/shop/inventory/`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                if (!response.ok) throw new Error('Failed to fetch inventory');
+                inventory = await response.json();
+                renderInventoryList();
+            } catch (error) {
+                console.error("Error fetching inventory:", error);
+                // alert("Error fetching inventory. Check API server/authentication."); // Use console log instead of alert
+            }
+        }
+
+        function renderInventoryList() {
+            const container = document.getElementById('inventory-table-body');
+            if (!container) return;
+
+            if (inventory.length === 0) {
+                 container.innerHTML = '<tr><td colspan="6" class="py-4 text-center text-gray-500">No inventory items found.</td></tr>';
+                 return;
+            }
+
+            container.innerHTML = inventory.map(item => {
+                const stockColor = item.stock_quantity < 10 ? 'text-red-600 font-bold' : item.stock_quantity < 50 ? 'text-yellow-600' : 'text-green-600';
+                
+                return `
+                    <tr class="hover:bg-gray-50 transition duration-100">
+                        <td class="px-4 py-3 text-sm text-gray-500">${item.id}</td>
+                        <td class="px-4 py-3 font-semibold text-gray-800">${item.name}</td>
+                        <td class="px-4 py-3 text-gray-600">${item.category}</td>
+                        <td class="px-4 py-3 ${stockColor}">${item.stock_quantity}</td>
+                        <td class="px-4 py-3 font-bold text-right">₹${item.price.toFixed(2)}</td>
+                        <td class="px-4 py-3 text-right space-x-2">
+                            <button onclick="editItem(${item.id})" class="text-indigo-600 hover:text-indigo-800 text-sm">Edit</button>
+                            <button onclick="deleteItem(${item.id})" class="text-red-600 hover:text-red-800 text-sm">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        function editItem(itemId) {
+            // Note: In real app, this should fetch current item data via GET /api/shop/inventory/{id}/
+            alert(`MOCK: Edit item ${itemId} functionality triggered. (API: PUT/PATCH to /api/shop/inventory/${itemId}/)`);
+            // Implementation: Display a modal/form for editing and send PUT/PATCH to Django
+        }
+
+        function deleteItem(itemId) {
+            if (confirm(`Are you sure you want to delete item ${itemId}? This action cannot be undone.`)) {
+                // Note: In real app, this should send a DELETE request.
+                alert(`MOCK: Deleting item ${itemId} functionality triggered. (API: DELETE to /api/shop/inventory/${itemId}/)`);
+                // Implementation: send DELETE request to Django, then call fetchInventory();
+            }
+        }
+
+        // --- UTILITY ---
+        function showToast(message, type) {
+            const toast = document.getElementById('toast-notification');
+            const toastText = document.getElementById('toast-text');
+            const colors = {
+                success: 'bg-green-600 border-green-800',
+                warning: 'bg-yellow-500 border-yellow-700',
+                info: 'bg-blue-600 border-blue-800'
+            };
+
+            toast.className = `fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] p-4 rounded-xl shadow-2xl text-white font-semibold transition-all duration-300 transform border-b-4 ${colors[type]}`;
+            toastText.textContent = message;
+            toast.classList.remove('opacity-0', 'translate-y-full');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'translate-y-full');
+            }, 3500);
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = initApp;
+
+    </script>
+</head>
+<body class="antialiased min-h-screen">
+
+    <!-- Toast Notification --><div id="toast-notification" class="fixed bottom-5 left-1/2 -translate-x-1/2 z-[100] p-4 rounded-xl shadow-2xl text-white font-semibold transition-all duration-300 transform opacity-0 translate-y-full" style="min-width: 280px;">
+        <span id="toast-text"></span>
+    </div>
+
+    <!-- Admin Header (Visible on Dashboard/Inventory) --><header id="admin-header" class="bg-white shadow-admin sticky top-0 z-40 p-4 border-b">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <div class="flex items-center space-x-4">
+                <h1 class="text-3xl font-extrabold text-indigo-700">
+                    <span id="header-title">Admin Panel</span>
+                </h1>
+            </div>
+            <div class="flex items-center space-x-4">
+                <p class="hidden sm:block text-sm font-medium text-gray-600">Welcome, Shopkeeper!</p>
+                <button onclick="handleLogout()" class="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow-md btn-status">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Wrapper --><div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+
+        <!-- 1. Login View -->
+        <section id="view-login" class="app-view">
+            <div class="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-admin border border-gray-200 mt-20">
+                <h2 class="text-3xl font-bold text-indigo-700 mb-6 text-center">Shopkeeper Login</h2>
+                <form onsubmit="handleLogin(event)">
+                    <div class="mb-4">
+                        <label for="admin-username" class="block text-sm font-medium text-gray-700">Username</label>
+                        <input type="text" id="admin-username" required value="shopkeeper"
+                               class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <div class="mb-6">
+                        <label for="admin-password" class="block text-sm font-medium text-gray-700">Password</label>
+                        <input type="password" id="admin-password" required value="admin123"
+                               class="mt-1 block w-full p-3 border border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500">
+                    </div>
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-3 rounded-lg shadow-md btn-status">
+                        Secure Login
+                    </button>
+                </form>
+                <p class="mt-4 text-xs text-gray-500 text-center">Use: shopkeeper / admin123 (Mock)</p>
+            </div>
+        </section>
+
+        <!-- 2. Dashboard View (Orders & Code Check) -->
+        <section id="view-dashboard" class="app-view view-hidden">
+            
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-4 mb-6 border-b pb-2">
+                <button onclick="switchView('dashboard')" class="text-lg font-bold text-indigo-700 border-b-2 border-indigo-600 pb-2">Orders</button>
+                <button onclick="switchView('inventory')" class="text-lg font-medium text-gray-500 hover:text-indigo-600 pb-2">Inventory</button>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+                <!-- Pickup Code Check (QR/Code Lookup) -->
+                <div class="lg:col-span-1 bg-white p-6 rounded-2xl shadow-admin border border-gray-200 h-fit sticky top-20">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+                        <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-2a6 6 0 0112 0v2zm0 0l-1.429-1.429m0 0l-1.428 1.429M12 11a3 3 0 100 6 3 3 0 000-6z"></path></svg>
+                        <span>Pickup Verification</span>
+                    </h3>
+                    <form onsubmit="handlePickupCodeCheck(event)">
+                        <label for="pickup-code-input" class="block text-sm font-medium text-gray-700">Enter Pickup Code / Scan QR</label>
+                        <input type="text" id="pickup-code-input" required placeholder="E.g., QW3RTY"
+                               class="mt-1 block w-full p-3 border border-indigo-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 uppercase font-mono text-lg tracking-widest">
+                        <button type="submit" class="w-full mt-4 bg-indigo-500 hover:bg-indigo-600 text-white font-semibold py-3 rounded-lg shadow-md btn-status">
+                            Check Code
+                        </button>
+                    </form>
+                    <div id="code-check-result" class="mt-4 text-center text-sm text-gray-600">
+                        Awaiting code input...
+                    </div>
+                </div>
+
+                <!-- Order List -->
+                <div class="lg:col-span-2 space-y-4">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center space-x-2">
+                         <svg class="w-6 h-6 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path></svg>
+                        <span>Active Orders (Pending & Ready)</span>
+                    </h3>
+                    <div id="orders-list" class="space-y-3">
+                        <!-- Orders will be injected here -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 3. Order Detail View -->
+        <section id="view-order-detail" class="app-view view-hidden">
+            <button onclick="switchView('dashboard')" class="text-indigo-600 hover:underline mb-4 flex items-center">
+                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Back to Orders List
+            </button>
+            <div class="bg-white p-8 rounded-2xl shadow-admin border border-gray-200">
+                <h2 class="text-3xl font-bold text-gray-900 mb-6 border-b pb-2">Order Details #<span id="detail-order-id"></span></h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    <div class="bg-gray-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-500">Student</p>
+                        <p id="detail-student-name" class="font-bold text-gray-800 text-lg"></p>
+                    </div>
+                    <div class="bg-indigo-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-500">Pickup Code</p>
+                        <p id="detail-pickup-code" class="font-extrabold text-indigo-700 text-xl tracking-widest"></p>
+                    </div>
+                    <div class="bg-yellow-50 p-4 rounded-lg">
+                        <p class="text-sm text-gray-500">Pickup Slot</p>
+                        <p id="detail-pickup-slot" class="font-bold text-gray-800 text-lg"></p>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                    <!-- Items List -->
+                    <div>
+                        <h3 class="text-xl font-bold text-gray-800 mb-4">Items Ordered</h3>
+                        <ul id="detail-items-list" class="space-y-2 bg-gray-100 p-4 rounded-lg border border-gray-200">
+                            <!-- Items injected here -->
+                        </ul>
+                    </div>
+                    
+                    <!-- Order Summary & Status -->
+                    <div class="flex flex-col space-y-6">
+                        <div class="p-4 bg-indigo-50 rounded-lg">
+                            <p class="text-sm text-gray-600">Payment (<span id="detail-payment-method" class="font-bold"></span>)</p>
+                            <p class="font-extrabold text-3xl text-indigo-800 mt-1">Total: <span id="detail-total-amount"></span></p>
+                        </div>
+                        
+                        <div class="p-4 bg-white border border-gray-300 rounded-lg">
+                            <p class="text-sm text-gray-500">Current Status</p>
+                            <p id="detail-status-current" class="font-bold text-2xl text-red-600"></p>
+                        </div>
+
+                        <h3 class="text-xl font-bold text-gray-800 border-t pt-4">Update Status</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button id="status-update-btn-ready" class="w-full bg-yellow-500 text-white font-semibold py-3 rounded-lg shadow-md btn-status">Ready for Pickup</button>
+                            <button id="status-update-btn-completed" class="w-full bg-green-500 text-white font-semibold py-3 rounded-lg shadow-md btn-status">Mark as Collected</button>
+                            <button id="status-update-btn-cancel" class="col-span-2 bg-gray-400 text-white font-semibold py-3 rounded-lg shadow-md btn-status">Cancel Order</button>
+                        </div>
+                        <p class="text-xs text-red-500 pt-2">Note: Marking as collected updates stock and completes the transaction.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 4. Inventory View -->
+        <section id="view-inventory" class="app-view view-hidden">
+            <!-- Navigation Tabs -->
+            <div class="flex space-x-4 mb-6 border-b pb-2">
+                <button onclick="switchView('dashboard')" class="text-lg font-medium text-gray-500 hover:text-indigo-600 pb-2">Orders</button>
+                <button onclick="switchView('inventory')" class="text-lg font-bold text-indigo-700 border-b-2 border-indigo-600 pb-2">Inventory</button>
+            </div>
+
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="text-2xl font-bold text-gray-800">Current Stock</h3>
+                <button onclick="alert('MOCK: Add New Item Modal')" class="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-lg shadow-md btn-status">
+                    + Add New Item
+                </button>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-admin overflow-hidden">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Item Name</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Category</th>
+                            <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Stock</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Price</th>
+                            <th class="px-4 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventory-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Inventory items will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</body>
+</html>
+```
+
+---
+
+## **Step 2: Backend Task - Django Setup & Verification**
+
+While the frontend is updated, you need to set up the Django environment to handle those requests. The files I provided earlier (`models.py`, `serializers.py`, `views.py`, `urls.py`, and `views_shopkeeper.py`) are crucial for this.
+
+Here is the step-by-step process you should follow to set up your Django project and make it ready for the frontend integration:
+
+### **Part A: Initial Django Setup**
+
+1.  **Start Project:** Create a project and an app (e.g., `quickpickup` project, `api` app).
+    ```bash
+    django-admin startproject quickpickup
+    cd quickpickup
+    python manage.py startapp api
+    ```
+
+2.  **Configure `settings.py`:**
+    * Add your new app and DRF:
+        ```python
+        INSTALLED_APPS = [
+            # ... default apps
+            'rest_framework',
+            'api', # Your application name
+        ]
+        ```
+    * **Configure MySQL (via XAMPP):** Replace the default SQLite setup with your MySQL settings (assuming your XAMPP MySQL database name is `campus_stationary_db` and user is `root`):
+        ```python
+        DATABASES = {
+            'default': {
+                'ENGINE': 'django.db.backends.mysql',
+                'NAME': 'campus_stationary_db', # Name of your MySQL DB
+                'USER': 'root',                # Your MySQL username
+                'PASSWORD': '',                # Your MySQL password (usually empty for XAMPP root)
+                'HOST': '127.0.0.1',           # Host
+                'PORT': '3306',                # Port
+            }
+        }
+        ```
+
+3.  **Copy Model Files:** Place the `models.py`, `serializers.py`, `views.py`, `views_shopkeeper.py`, and `urls.py` files (which I provided previously) into the `api` directory of your Django project.
+
+4.  **Create Root URL Configuration:** Open `quickpickup/urls.py` and link the `api` app's URLs:
+    ```python
+    # quickpickup/urls.py
+    from django.contrib import admin
+    from django.urls import path, include
+
+    urlpatterns = [
+        path('admin/', admin.site.urls),
+        path('api/', include('api.urls')),  # Link your API endpoints
+    ]
+    ```
+
+### **Part B: Database Initialization and Migration**
+
+5.  **Run Migrations:** This step creates the tables defined in `models.py` in your MySQL database.
+    ```bash
+    python manage.py makemigrations api
+    python manage.py migrate
+    ```
+
+6.  **Create Superuser:** Needed to access the Django Admin panel for initial data entry.
+    ```bash
+    python manage.py createsuperuser
+    ```
+
+7.  **Run Server and Verify Backend:**
+    ```bash
+    python manage.py runserver
+    

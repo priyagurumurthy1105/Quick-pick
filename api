@@ -1,0 +1,93 @@
+from django.db import models
+from django.contrib.auth.models import User
+
+# --- Choices ---
+ORDER_STATUS_CHOICES = (
+    ('PENDING', 'Pending Confirmation'),
+    ('READY', 'Ready for Pickup'),
+    ('COMPLETED', 'Completed'),
+    ('CANCELLED', 'Cancelled by User/System'),
+)
+
+PAYMENT_CHOICES = (
+    ('COD', 'Cash on Delivery'),
+    ('ONLINE', 'Online Payment (UPI/QR)'),
+)
+
+# --- 1. User Profile (Extends default Django User) ---
+class UserProfile(models.Model):
+    """Stores additional fields for the default User model."""
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    is_shopkeeper = models.BooleanField(default=False)
+    # Future field for cancellation history, enabling penalties
+    cancellation_count = models.IntegerField(default=0)
+    
+    def __str__(self):
+        return self.user.username
+
+# --- 2. Stationery Products ---
+class Product(models.Model):
+    """Represents a single stationery item."""
+    name = models.CharField(max_length=255)
+    description = models.TextField()
+    price = models.DecimalField(max_digits=6, decimal_places=2) # Price in Rupees (INR)
+    stock_quantity = models.IntegerField(default=0)
+    category = models.CharField(max_length=100)
+    image_url = models.URLField(max_length=500, blank=True, null=True)
+    is_special_service = models.BooleanField(default=False, help_text="Set true for Xerox/Printing services.")
+
+    def __str__(self):
+        return f"{self.name} (Stock: {self.stock_quantity})"
+
+# --- 3. Pickup Time Slots (Crucial for the project logic) ---
+class PickupTimeSlot(models.Model):
+    """Pre-defined 15-minute time slots for order collection."""
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    capacity = models.IntegerField(default=10, help_text="Max orders per slot to prevent queues.")
+    # You would typically add logic here to track actual orders placed per slot
+
+    def __str__(self):
+        return f"{self.start_time.strftime('%I:%M %p')} - {self.end_time.strftime('%I:%M %p')}"
+    
+    class Meta:
+        ordering = ['start_time']
+
+# --- 4. Order Management ---
+class Order(models.Model):
+    """Represents a student's placed order."""
+    student = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
+    
+    # FK to the time slot model
+    pickup_slot = models.ForeignKey(PickupTimeSlot, on_delete=models.PROTECT)
+    
+    # Status and Payment
+    status = models.CharField(max_length=20, choices=ORDER_STATUS_CHOICES, default='PENDING')
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_CHOICES, default='ONLINE')
+    total_amount = models.DecimalField(max_digits=8, decimal_places=2)
+
+    # Confirmation Code (The key retrieval mechanism)
+    pickup_code = models.CharField(max_length=10, unique=True, null=True, blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Order {self.id} by {self.student.username} - {self.status}"
+
+class OrderItem(models.Model):
+    """Details of products and quantities within a specific Order."""
+    order = models.ForeignKey(Order, on_delete=models.CASCADE, related_name='items')
+    product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    quantity = models.IntegerField()
+    price_at_order = models.DecimalField(max_digits=6, decimal_places=2, help_text="Price when the order was placed")
+    
+    # Specific logic for the Xerox/Service item
+    is_xerox_service = models.BooleanField(default=False)
+    xerox_file_url = models.CharField(max_length=500, blank=True, null=True)
+
+    @property
+    def subtotal(self):
+        return self.quantity * self.price_at_order
+        
+    def __str__(self):
+        return f"{self.quantity} x {self.product.name}"
